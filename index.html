@@ -155,9 +155,6 @@
     #logo-container img { max-width: 600px; margin: 0 auto; border-radius: 0 0 15px 15px; }
     #logo-container { padding-top: 10px; }
     }
-	.hidden-season-end {
-		display: none !important;
-	}
   </style>
 </head>
 <body>
@@ -171,7 +168,6 @@
   <button class="admin-only" onclick="removeTeam()">- Team</button>
   <button class="admin-only import-btn" onclick="document.getElementById('file-import').click()">📂 Import File</button>
   <button class="admin-only end-event-btn" onclick="endEvent()">🏆 Finalize Week</button>
-  <button class="admin-only" onclick="endSeasonSummary()" style="background: #8e44ad;">🏆 End Season Summary</button>
   <button class="admin-only" onclick="exportData()">💾 JSON Backup</button>
   <button class="admin-only" onclick="resetScores()" style="background: #c0392b;">🗑️ Reset All</button>
   <input type="file" id="file-import" style="display:none" accept=".json" onchange="importData(event)">
@@ -180,11 +176,11 @@
 <div id="capture-area">
   <div class="header-block">
     <div class="brand-main">LST74 STABLEFORD LEAGUE</div>
-    <div class="sub-brand">End of Season - Order of Merit</div>
+    <div class="sub-brand">Season Order of Merit</div>
     <input type="text" id="venue-name" class="venue-input" placeholder="ENTER VENUE" readonly>
   </div>
   
-  <div id="round-toggle-area" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
+  <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 20px;">
     <button class="toggle-rd" onclick="toggleRound()" style="margin: 0; height: 32px; padding: 0 15px; font-size: 0.7rem;">
         View Round <span id="next-rd-label">2</span>
     </button>
@@ -193,7 +189,7 @@
     </div>
   </div>
 
-  <div id="main-scorecard-wrapper" class="table-wrapper">
+  <div class="table-wrapper">
     <table id="scorecard" class="round-1-theme">
       <thead>
         <tr>
@@ -318,98 +314,41 @@ function loadData() {
 }
 
 function applyState(state) {
-    if (!state) return;
-
-    // 1. SET GLOBAL FLAG: Determine if the season is active or archived
-    window.seasonEndedFlag = state.seasonEnded || false;
-
-    // 2. LOAD PLAYER & TEAM DATA
+    if(!state) return;
     players = state.players || [];
-    teams = state.teams || ['A', 'B', 'C'];
-    teamLabels = state.teamLabels || { 'A': 'Team A', 'B': 'Team B', 'C': 'Team C' };
-    
-    // 3. LOAD SEASONAL STANDINGS & HISTORY
+    teams = state.teams || ['A', 'B'];
+    teamLabels = state.teamLabels || { 'A': 'Team A', 'B': 'Team B' };
     seasonStandings = state.seasonStandings || {};
     previousRanks = state.previousRanks || {};
     history = state.history || [];
-    
-    // 4. LOAD VENUE & COURSE DATA
-    const venueInput = document.getElementById('venue-name');
-    if (venueInput) venueInput.value = state.venueName || '';
+	window.teamSeasonPoints = state.teamSeasonPoints || {};
+    document.getElementById('venue-name').value = state.venueName || '';
     
     const parInputs = document.querySelectorAll('.par-input');
     const siInputs = document.querySelectorAll('.si-input');
+    if (state.pars) state.pars.forEach((v, i) => { if(parInputs[i]) parInputs[i].value = v; });
+    if (state.sis) state.sis.forEach((v, i) => { if(siInputs[i]) siInputs[i].value = v; });
     
-    if (state.pars) {
-        state.pars.forEach((v, i) => { if (parInputs[i]) parInputs[i].value = v; });
-    }
-    if (state.sis) {
-        state.sis.forEach((v, i) => { if (siInputs[i]) siInputs[i].value = v; });
-    }
-
-    // 5. UI INITIALIZATION: Decide what to show based on season status
-    if (window.seasonEndedFlag) {
-        // If archived, trigger the cleanup immediately
-        hideLiveScoringElements();
-    } else {
-        // If active, render the interactive scorecard and team grids
-        renderPlayers();
-        updateTeamTables();
-    }
-
-    // 6. ALWAYS RENDER SUMMARY TABLES: These remain visible in both states
-    updateIndividualLeaderboard();
+    renderPlayers();
     renderHistory();
 }
 
 function renderPlayers() {
   const tbody = document.getElementById('players-body');
-  const container = document.getElementById('main-scorecard-wrapper');
-  
-  // 1. GATEKEEPER: If season has ended, hide the scorecard and abort rendering
-  if (window.seasonEndedFlag) {
-    if (container) container.style.display = 'none';
-    tbody.innerHTML = ''; // Ensure it's empty
-    return; 
-  }
-
-  // 2. Standard rendering logic if season is still active
-  if (container) container.style.display = 'block';
   tbody.innerHTML = '';
-  
   const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
-  
   players.forEach((p, pIdx) => {
     const scores = currentViewingRound === 1 ? p.r1Scores : p.r2Scores;
     const isIndiv = p.team.toUpperCase() === 'X';
 
-    // Build the Gross Score Row
     let trScore = `<tr>
-      <td class="admin-only" style="${isAdmin ? 'display:table-cell' : 'display:none'}">
-        <button class="del-btn" onclick="deletePlayer(${pIdx})">✕</button>
-      </td>
-      <td style="text-align:left; padding-left:8px">
-        <input class="player-name-input" value="${p.name}" ${isAdmin ? '' : 'readonly'} onchange="players[${pIdx}].name=this.value; saveState();">
-      </td>
-      <td>
-        <input type="number" class="score-input" value="${p.handicap}" ${isAdmin ? '' : 'readonly'} oninput="players[${pIdx}].handicap=this.value; updateCalculations();">
-      </td>
-      <td>
-        <input class="score-input ${isIndiv ? 'indiv-team-indicator' : ''}" style="width:35px" value="${p.team}" ${isAdmin ? '' : 'readonly'} onchange="players[${pIdx}].team=this.value.toUpperCase(); renderPlayers();">
-      </td>`;
-    
-    for(let i=0; i<18; i++) {
-      trScore += `<td><input type="number" class="score-input" data-p="${pIdx}" data-h="${i}" value="${scores[i] || ''}" ${isAdmin ? '' : 'readonly'} oninput="updateCalculations()"></td>`;
-    }
-    
+      <td class="admin-only" style="${isAdmin ? 'display:table-cell' : 'display:none'}"><button class="del-btn" onclick="deletePlayer(${pIdx})">✕</button></td>
+      <td style="text-align:left; padding-left:8px"><input class="player-name-input" value="${p.name}" ${isAdmin ? '' : 'readonly'} onchange="players[${pIdx}].name=this.value; saveState();"></td>
+      <td><input type="number" class="score-input" value="${p.handicap}" ${isAdmin ? '' : 'readonly'} oninput="players[${pIdx}].handicap=this.value; updateCalculations();"></td>
+      <td><input class="score-input ${isIndiv ? 'indiv-team-indicator' : ''}" style="width:35px" value="${p.team}" ${isAdmin ? '' : 'readonly'} onchange="players[${pIdx}].team=this.value.toUpperCase(); renderPlayers();"></td>`;
+    for(let i=0; i<18; i++) trScore += `<td><input type="number" class="score-input" data-p="${pIdx}" data-h="${i}" value="${scores[i] || ''}" ${isAdmin ? '' : 'readonly'} oninput="updateCalculations()"></td>`;
     trScore += `<td class="final-total-box" id="tot-gross-${pIdx}">0</td></tr>`;
-
-    // Build the Net/Points Row
-    let trNet = ''; 
-    for(let i=0; i<18; i++) {
-      trNet += `<td id="net-${pIdx}-${i}" style="padding:1px 0;">-</td>`;
-    }
-
+    let trNet = ''; for(let i=0; i<18; i++) trNet += `<td id="net-${pIdx}-${i}" style="padding:1px 0;">-</td>`;
     tbody.innerHTML += trScore + `<tr style="background: rgba(0,0,0,0.02); height:22px">
         <td class="admin-only" style="${isAdmin ? 'display:table-cell' : 'display:none'}"></td>
         <td colspan="3" style="text-align:right; font-weight:700; color:#aaa; font-size:0.45rem; padding-right:5px">NET/PTS</td>
@@ -417,7 +356,6 @@ function renderPlayers() {
         <td id="p-total-${pIdx}" style="background:#333; color:white; font-weight:bold; font-size:0.75rem;">0</td>
     </tr>`;
   });
-
   updateCalculations();
 }
 
@@ -540,93 +478,31 @@ function updateIndividualLeaderboard() {
 }
 
 function updateTeamTables() {
-    const container = document.getElementById('team-container');
-    if (!container) return;
+  const container = document.getElementById('team-container');
+  container.innerHTML = '';
+  const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
+  const teamColors = { 'A': '#2e7d32', 'B': '#1565c0', 'C': '#880e4f', 'D': '#e65100', 'DEFAULT': '#444' };
+  const activeTeams = teams.filter(t => t.toUpperCase().trim() !== 'X');
 
-    // 1. SEASON END CHECK
-    // If the season is over, wipe the HTML and hide the container completely
-    if (window.seasonEndedFlag) {
-        container.innerHTML = '';
-        container.style.display = 'none';
-        return;
-    } else {
-        container.style.display = 'grid'; // Or 'flex' depending on your layout
-    }
+  activeTeams.forEach(tId => {
+    const lookupId = tId.toUpperCase().trim();
+    let teamPlayers = players.filter(p => p.team.toUpperCase().trim() === lookupId);
+    if (teamPlayers.length === 0) return;
 
-    container.innerHTML = '';
-    const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true';
+    teamPlayers.sort((a, b) => ((b.r1Total || 0) + (b.r2Total || 0)) - ((a.r1Total || 0) + (a.r2Total || 0)));
+    const headerColor = teamColors[lookupId] || teamColors['DEFAULT'];
 
-    // Define colors for the team headers
-    const teamColors = {
-        'A': '#2e7d32', // Emerald Green
-        'B': '#1565c0', // Royal Blue
-        'C': '#880e4f', // Burgundy
-        'D': '#e65100', // Deep Orange
-        'DEFAULT': '#444'
-    };
+    let r1T = 0, r2T = 0;
+    let rows = teamPlayers.map(p => {
+        const pR1 = parseFloat(p.r1Total) || 0;
+        const pR2 = parseFloat(p.r2Total) || 0;
+        r1T += pR1; r2T += pR2;
+        return `<tr><td class="team-player-name">${p.name}</td><td>${p.r1Total || 0}</td><td>${p.r2Total || 0}</td><td style="font-weight:900;">${pR1 + pR2}</td></tr>`;
+    }).join('');
 
-    // Filter out 'X' (Individuals) and empty entries
-    const activeTeams = teams.filter(t => t.toUpperCase().trim() !== 'X' && t.trim() !== '');
-
-    activeTeams.forEach(tId => {
-        const lookupId = tId.toString().toUpperCase().trim();
-        
-        // Find players assigned to this specific team
-        let teamPlayers = players.filter(p => p.team.toUpperCase().trim() === lookupId);
-        if (teamPlayers.length === 0) return;
-
-        // Get the header color or fallback to default
-        const headerColor = teamColors[lookupId] || teamColors['DEFAULT'];
-
-        let r1T = 0, r2T = 0;
-        let rows = teamPlayers.map(p => {
-            const pR1 = parseFloat(p.r1Total) || 0;
-            const pR2 = parseFloat(p.r2Total) || 0;
-            r1T += pR1; r2T += pR2;
-            return `
-                <tr>
-                    <td>${p.name}</td>
-                    <td>${p.r1Total || 0}</td>
-                    <td>${p.r2Total || 0}</td>
-                    <td>${pR1 + pR2}</td>
-                </tr>`;
-        }).join('');
-
-        const label = teamLabels[tId] || `Team ${tId}`;
-        
-        container.innerHTML += `
-          <div class="team-table-wrapper">
-            <table class="team-table">
-                <thead>
-                    <tr style="background:${headerColor} !important">
-                        <th colspan="4">
-                            <input class="team-title-input" 
-                                   value="${label}" 
-                                   ${isAdmin ? '' : 'readonly'} 
-                                   onchange="teamLabels['${tId}']=this.value; saveState();">
-                        </th>
-                    </tr>
-                    <tr class="team-header-row">
-                        <th>PLAYER</th>
-                        <th>R1</th>
-                        <th>R2</th>
-                        <th>TOT</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${rows}
-                </tbody>
-                <tfoot>
-                    <tr class="team-footer">
-                        <td>TEAM TOTAL</td>
-                        <td>${r1T}</td>
-                        <td>${r2T}</td>
-                        <td style="background:#333; color:white;">${r1T + r2T}</td>
-                    </tr>
-                </tfoot>
-            </table>
-          </div>`;
-    });
+    const label = teamLabels[tId] || `Team ${tId}`;
+    container.innerHTML += `<div class="team-table-wrapper"><table class="team-table"><thead><tr style="background:${headerColor}"><th colspan="4"><input class="team-title-input" value="${label}" ${isAdmin ? '' : 'readonly'} onchange="teamLabels['${tId}']=this.value; saveState();"></th></tr><tr class="team-header-row"><th>PLAYER</th><th>R1</th><th>R2</th><th>TOT</th></tr></thead><tbody>${rows}</tbody><tr style="background:#f8f9fa; font-weight:900;"><td class="team-player-name">TOTAL</td><td>${r1T}</td><td>${r2T}</td><td style="color:${headerColor}">${r1T+r2T}</td></tr></table></div>`;
+  });
 }
 
 function renderHistory() {
@@ -770,116 +646,38 @@ function toggleRound() {
 }
 
 function saveState() {
-  const state = {
-    // 1. Core Data
-    players,
-    teams,
-    teamLabels,
-    
-    // 2. Standings & History
-    seasonStandings,
-    previousRanks,
+  const state = { 
+    players, // This now includes p.stats.ace if endEvent was updated
+    teams, 
+    teamLabels, 
+    seasonStandings, 
+    previousRanks, 
     history,
-    
-    // 3. Season Status (The key for your summary view)
-    seasonEnded: window.seasonEndedFlag || false,
-    
-    // 4. Course/Venue Info
     venueName: document.getElementById('venue-name').value,
     pars: Array.from(document.querySelectorAll('.par-input')).map(i => i.value),
     sis: Array.from(document.querySelectorAll('.si-input')).map(i => i.value)
   };
-
-  // Save to browser memory
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-// NEW FUNCTION: Triggers the archive state
-function endSeasonSummary() {
-    if (!confirm("Are you absolutely sure you want to END THE SEASON?\nThis will permanently hide player scorecards and individual team tables to leave a final season summary.")) return;
-    
-    window.seasonEndedFlag = true;
-    saveState();
-    hideLiveScoringElements();
-    alert("Season Closed! Back up your data file now for your records.");
-}
-
-// NEW FUNCTION: Handles the UI cleanup
-function hideLiveScoringElements() {
-    // 1. Set the global flag to true
-    window.seasonEndedFlag = true;
-    
-    // 2. Hide the Scorecard and Round Switchers
-    const mainScorecard = document.getElementById('main-scorecard-wrapper');
-    if (mainScorecard) mainScorecard.style.display = 'none';
-
-    const roundToggle = document.getElementById('round-toggle-area');
-    if (roundToggle) roundToggle.style.display = 'none';
-    
-    // 3. Hide the Venue/Par/SI header block
-    const headerBlock = document.querySelector('.header-block');
-    if (headerBlock) headerBlock.style.display = 'none';
-    
-    // 4. Wipe and hide the Team Breakdown containers
-    const teamContainer = document.getElementById('team-container');
-    if (teamContainer) {
-        teamContainer.innerHTML = '';
-        teamContainer.style.display = 'none';
-    }
-    
-    // 5. Handle the Admin Controls / Title Swap
-    const controls = document.getElementById('controls');
-    if (controls) {
-        // Check if we've already saved the 'End Season' state to local storage
-        const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        
-        if (savedState.seasonEnded) {
-            // If the JSON already knows the season is over, show the permanent Title
-            controls.innerHTML = `<h2 style="color: #2c3e50; margin: 20px 0; font-family: sans-serif; text-align: center;">🏆 Season 1 Summary</h2>`;
-        } else {
-            // If we just clicked the button but haven't exported yet, show the Export button
-            controls.innerHTML = `
-                <div style="text-align:center; padding: 20px;">
-                    <button onclick="exportData()" style="background: #2980b9; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-                        💾 Export Final Season Backup
-                    </button>
-                    <p style="color: #666; font-size: 0.8rem; margin-top: 10px;">Click to download your final archive file and lock the season summary.</p>
-                </div>`;
-        }
-    }
-    
-    // 6. Refresh the Leaderboards
-    // These remain visible so people can see the final rankings
-    updateIndividualLeaderboard();
-    if (typeof updateTeamSeasonTable === 'function') updateTeamSeasonTable();
-    renderHistory();
-}
-
 function exportData() {
-    // 1. Force a save to ensure seasonEndedFlag is captured
-    saveState();
-
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) return;
-
-    // 2. Trigger the file download
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const date = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `data.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    // 3. TRANSFORM THE UI
-    const controls = document.getElementById('controls');
-    if (controls) {
-        // Replace the button with a permanent, non-clickable heading
-        controls.innerHTML = `<h2 style="color: #2c3e50; margin: 10px 0; font-family: sans-serif;">🏆 Season 1 Summary</h2>`;
-    }
+  // Use the same structure as saveState to ensure all stats are in the file
+  const state = { 
+    players, 
+    teams, 
+    teamLabels, 
+    seasonStandings, 
+    previousRanks, 
+    history,
+    venueName: document.getElementById('venue-name').value,
+    pars: Array.from(document.querySelectorAll('.par-input')).map(i => i.value),
+    sis: Array.from(document.querySelectorAll('.si-input')).map(i => i.value)
+  };
+  const blob = new Blob([JSON.stringify(state)], {type: "application/json"});
+  const a = document.createElement('a'); 
+  a.href = URL.createObjectURL(blob);
+  a.download = `lst74_backup.json`; 
+  a.click();
 }
 
 function resetScores() {
